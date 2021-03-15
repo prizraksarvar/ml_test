@@ -89,7 +89,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.manual_buffer = experienceReplayBuffer(memory_size=5000)
 
-        learning_rate = 0.1
+        learning_rate = 1e-5
         # Осуществляем оптимизацию путем стохастического градиентного спуска
         self.optimizerSGD = optim.SGD(self.policy_estimator.network.parameters(), lr=learning_rate, momentum=0.9)
         # Создаем функцию потерь
@@ -103,8 +103,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.timer = QtCore.QTimer()
 
-        # self.start_manual()
-        self.start_autogame()
+        self.start_manual()
+        # self.start_autogame()
 
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
         if event.key() == Qt.Key_0:
@@ -163,9 +163,9 @@ class MainWindow(QtWidgets.QMainWindow):
                            self.device)
         self.global_buffer.clear()
 
-        # if self.iteration % 100 == 0:
-        #     sel_pr = manual_teach_net(self.manual_buffer.all_sample_batch(), self.policy_estimator, self.optimizerSGD,
-        #                               self.criterionSGD, self.device)
+        if self.iteration % 500 == 0:
+            sel_pr = manual_teach_net(self.manual_buffer.sample_batch(batch_size=32), self.policy_estimator, self.optimizerSGD,
+                                      self.criterionSGD, self.device)
 
         # Анализ степени обученности
         if x % 20 == 0:
@@ -223,7 +223,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # выполняем действие
             done = G.act_pg(action)
             # Отрисовка игры
-            plt.imshow(G.get_weel_state())
+            plt.imshow(G.get_weel_s16tate())
             camera.snap()
 
         anim = camera.animate()
