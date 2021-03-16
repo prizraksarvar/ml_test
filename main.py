@@ -89,7 +89,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.manual_buffer = experienceReplayBuffer(memory_size=5000)
 
-        learning_rate = 1e-5
+        learning_rate = 1e-4
         # Осуществляем оптимизацию путем стохастического градиентного спуска
         self.optimizerSGD = optim.SGD(self.policy_estimator.network.parameters(), lr=learning_rate, momentum=0.9)
         # Создаем функцию потерь
@@ -103,8 +103,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.timer = QtCore.QTimer()
 
-        self.start_manual()
-        # self.start_autogame()
+        # self.start_manual()
+        self.start_autogame()
 
     def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
         if event.key() == Qt.Key_0:
@@ -153,47 +153,53 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def start_autogame_iteration(self):
         x = self.iteration
-        print('Цикл обучения № ', x)
         data_set_images, data_set_actions, data_set_reward = game_funct(kol_game, self.policy_estimator, higth_weel_g,
                                                                         width_weel_g, width_racet_g,
                                                                         max_point_weel_g, kol_point,
                                                                         min_len_between_point, self.list_rolout_score)
         self.global_buffer.append_butch(data_set_images, data_set_actions, data_set_reward)
-        sel_pr = teach_net(self.global_buffer.sample_batch(batch_size=64), self.policy_estimator, self.optimizer_adam,
+        sel_pr = teach_net(self.global_buffer.sample_batch(batch_size=128), self.policy_estimator, self.optimizer_adam,
                            self.device)
         self.global_buffer.clear()
 
-        if self.iteration % 500 == 0:
-            sel_pr = manual_teach_net(self.manual_buffer.sample_batch(batch_size=32), self.policy_estimator, self.optimizerSGD,
-                                      self.criterionSGD, self.device)
+        # lr_in = 1e-2 * 0.95 * (x / 10)
+        # self.optimizer_adam = optim.Adam(self.policy_estimator.network.parameters(), lr=lr_in)  # , weight_decay=wd_in)
+
+        # if self.iteration % 500 == 0:
+        #     sel_pr = manual_teach_net(self.manual_buffer.sample_batch(batch_size=32), self.policy_estimator, self.optimizerSGD,
+        #                               self.criterionSGD, self.device)
 
         # Анализ степени обученности
-        if x % 20 == 0:
-            if x % 100 == 0:
-                # self.canvas.axes.cla()
-                paint_mean_score(x, self.list_rolout_score, self.list_mean_score, self.canvas)
-                # self.optimizer_adam = optim.Adam(self.policy_estimator.network.parameters(),
-                #                                  lr=1e-2 * 0.95 * (x / 100))  # , weight_decay=wd_in)
-                self.list_rolout_score = []
 
-            print('Цикл обучения № ', x)
-            if len(self.list_rolout_score) >= step:
-                mean_score = np.array(self.list_rolout_score[-step:]).mean()
-            else:
+        if x % 100 == 0:
+            # self.canvas.axes.cla()
+            paint_mean_score(x, self.list_rolout_score, self.list_mean_score, self.canvas)
+            # self.optimizer_adam = optim.Adam(self.policy_estimator.network.parameters(),
+            #                                  lr=1e-2 * 0.95 * (x / 100))  # , weight_decay=wd_in)
+            self.list_rolout_score = []
+
+        print('Цикл обучения № ', x)
+        mean_score=0
+        if len(self.list_rolout_score) >= step:
+            mean_score = np.array(self.list_rolout_score[-step:]).mean()
+        else:
+            if len(self.list_mean_score) > 0:
                 mean_score = self.list_mean_score[-1]
-            mean_score = round(mean_score, 2)
+        mean_score = round(mean_score, 2)
+        if mean_score >= kol_point * kol_game:
+            print('Обучение Закончено')
+            self.print_last_game(self.policy_estimator)
+            return
+
+        if x % 20 == 0:
             print('Точность на последних циклах ', str(step), ' = ', mean_score)
-            execTime = round(time.time() - self.start_time, 2)
-            print("--- %s seconds ---" % execTime)
+            exec_time = round(time.time() - self.start_time, 2)
+            print("--- %s seconds ---" % exec_time)
             self.canvas.axes.set_title(
                 'Цикл обучения № ' + str(x) + '\nТочность на последних циклах ' + str(step) + ' = ' + str(
-                    mean_score) + "\n--- %s seconds ---" % execTime,
+                    mean_score) + "\n--- %s seconds ---" % exec_time,
                 fontsize=12)
             self.canvas.draw()
-            if mean_score >= kol_point * kol_game:
-                print('Обучение Закончено')
-                self.print_last_game(self.policy_estimator)
-                return
             self.iteration = self.iteration + 1
             self.timer.singleShot(10, self.start_autogame_iteration)
         else:
