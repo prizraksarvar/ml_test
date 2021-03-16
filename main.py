@@ -37,6 +37,8 @@ from matplotlib.figure import Figure
 
 matplotlib.use('Qt5Agg')
 
+DIR = '/home/prizrak/Загрузки/'
+
 higth_weel_g = 32  # глубина колодца
 width_weel_g = 16  # ширина  колодца
 width_racet_g = 4  # ширина  ракетки
@@ -186,9 +188,18 @@ class MainWindow(QtWidgets.QMainWindow):
             if len(self.list_mean_score) > 0:
                 mean_score = self.list_mean_score[-1]
         mean_score = round(mean_score, 2)
-        if mean_score >= kol_point * kol_game:
+        if mean_score >= kol_point * kol_game or x > 50000:
             print('Обучение Закончено')
+            self.save_model()
             self.print_last_game(self.policy_estimator)
+            self.save_loss()
+
+            exec_time = round(time.time() - self.start_time, 2)
+            print("--- %s seconds ---" % exec_time)
+            self.canvas.axes.set_title(
+                'Обучение закончено\nДанные сохранены' + "\n--- %s seconds ---" % exec_time,
+                fontsize=12)
+            self.canvas.draw()
             return
 
         if x % 20 == 0:
@@ -206,6 +217,12 @@ class MainWindow(QtWidgets.QMainWindow):
             # Отрисовка не нужна
             self.iteration = self.iteration + 1
             self.start_autogame_iteration()
+
+    def save_model(self):
+        torch.save(self.policy_estimator.network.state_dict(), DIR+'smart_2.pth')
+
+    def save_loss(self):
+        self.canvas.figure.savefig(DIR + 'smart_2_loss.png')
 
     def print_last_game(self, policy_estimator):
         fig = plt.figure(figsize=(5, 5))
@@ -229,12 +246,12 @@ class MainWindow(QtWidgets.QMainWindow):
             # выполняем действие
             done = G.act_pg(action)
             # Отрисовка игры
-            plt.imshow(G.get_weel_s16tate())
+            plt.imshow(G.get_weel_state())
             camera.snap()
 
         anim = camera.animate()
 
-        anim.save('/home/prizrak/Загрузки/smart_2.gif', writer='PillowWriter', fps=50)
+        anim.save(DIR+'smart_2.gif', writer='PillowWriter', fps=50)
 
 
 # rc('animation', html='jshtml')
