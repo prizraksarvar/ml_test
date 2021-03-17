@@ -98,7 +98,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.criterionSGD = nn.NLLLoss()
 
         self.global_buffer = experienceReplayBuffer(memory_size=5000)
-        self.optimizer_adam = optim.Adam(self.policy_estimator.network.parameters(), lr=lr_in)  # , weight_decay=wd_in)
+        # self.optimizer_adam = optim.Adam(self.policy_estimator.network.parameters(), lr=lr_in)  # , weight_decay=wd_in)
+        self.optimizer_adam = optim.Adamax(self.policy_estimator.network.parameters(), lr=lr_in)
 
         self.list_mean_score = [0]  # Список усредненных значений
         self.list_rolout_score = []
