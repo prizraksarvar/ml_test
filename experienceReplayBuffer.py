@@ -16,6 +16,12 @@ class experienceReplayBuffer:
         return batch
 
     # Получаем Батч случайных примеров из буфера памяти
+    def all_random_sample_batch(self):
+        samples = np.random.choice(len(self.replay_memory), len(self.replay_memory), replace=False)
+        batch = zip(*[self.replay_memory[i] for i in samples])
+        return batch
+
+    # Получаем Батч случайных примеров из буфера памяти
     def all_sample_batch(self):
         batch = zip(*self.replay_memory)
         return batch
