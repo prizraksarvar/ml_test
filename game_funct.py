@@ -98,18 +98,9 @@ def game_funct(kol_game, policy_estimator, higth_weel_g, width_weel_g, width_rac
                     'muvie': np.array(list_muvies),
                     'score': np.array(list_scores)}
 
-    data_set_out = copy.deepcopy(data_set_loc)
-
-    # print('Результат серии = ', rollout_score)
-    # print('Кол-во примеров = ', len(list_images))
     list_rolout_score.append(rollout_score)
 
-    data_set_loc.clear()  # Словарь с ДатаСетом
-    list_images.clear()  # Список массивов Изображений серии игр
-    list_muvies.clear()  # Список Действий Агента
-    list_scores.clear()  # Список Результатов серии игр
-
-    return data_set_out['image'], data_set_out['muvie'], data_set_out['score']
+    return data_set_loc['image'], data_set_loc['muvie'], data_set_loc['score']
 
 
 def discount_correct_rewards(r, gamma=0.98):  # Дисконтированная награда
@@ -154,21 +145,12 @@ def teach_net(batch, policy_estimator, optimizer, loss_fn, device_in='cuda'):
 
     action_tensor = torch.Tensor(actions).long().to(device_in)
 
-    if loss_fn is None:
-        # Этап 1 - логарифмируем вероятности действий
-        prob = torch.log(policy_estimator.predict(image_tensor))
-        # Этап 2 - отрицательное среднее произведения вероятностей на награду
-        selected_probs = score_tensor * prob[np.arange(len(action_tensor)), action_tensor]
-        loss = -selected_probs.mean()
-    else:
-        # loss = loss_fn(policy_estimator.predict(image_tensor), action_tensor)
-        # Этап 1 - логарифмируем вероятности действий
-        prob = torch.log(policy_estimator.predict(image_tensor)[np.arange(len(action_tensor)), action_tensor])
-        # Этап 2 - отрицательное среднее произведения вероятностей на награду
-        selected_probs = score_tensor * prob
-        loss = -selected_probs.mean()
+    # Этап 1 - логарифмируем вероятности действий
+    prob = torch.log(policy_estimator.predict(image_tensor)[np.arange(len(action_tensor)), action_tensor])
+    # Этап 2 - отрицательное среднее произведения вероятностей на награду
+    selected_probs = score_tensor * prob
+    loss = -selected_probs.mean()
     loss.backward()
     optimizer.step()
 
-
-
+    return loss.item()
