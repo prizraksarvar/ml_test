@@ -6,9 +6,10 @@ from PyQt5.QtCore import Qt
 
 from Game import Game
 from ManualGame import ManualGame
+from NetworkTrainer import NetworkTrainer
 from PolicyEstimator import PolicyEstimator
 from experienceReplayBuffer import experienceReplayBuffer
-from game_funct import manual_teach_net, game_funct, teach_net, paint_mean_score
+from game_funct import manual_teach_net, game_funct, teach_net
 
 import numpy as np
 import random
@@ -70,7 +71,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.manual_game = None
         # Create the maptlotlib FigureCanvas object,
         # which defines a single set of axes as self.axes.
-        sc = MplCanvas(self, width=5, height=5, dpi=100)
+        sc = MplCanvas(self, width=10, height=10, dpi=100)
         # sc.axes.plot([0,1,2,3,4], [10,1,20,3,40])
 
         self.start_time = time.time()
@@ -86,26 +87,22 @@ class MainWindow(QtWidgets.QMainWindow):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print('Using device:', self.device)
 
-        self.policy_estimator = PolicyEstimator(statement_size=higth_weel_g * width_weel_g, action_size=9,
-                                                device_in=self.device)
-
         self.manual_buffer = experienceReplayBuffer(memory_size=5000)
 
         learning_rate = 1e-4
         # Осуществляем оптимизацию путем стохастического градиентного спуска
-        self.optimizerSGD = optim.SGD(self.policy_estimator.network.parameters(), lr=learning_rate, momentum=0.9)
+        # self.optimizerSGD = optim.SGD(self.policy_estimator.network.parameters(), lr=learning_rate, momentum=0.9)
         # Создаем функцию потерь
-        self.criterionSGD = nn.NLLLoss()
+        # self.criterionSGD = nn.NLLLoss()
 
-        self.global_buffer = experienceReplayBuffer(memory_size=5000)
-        # self.optimizer_adam = optim.Adam(self.policy_estimator.network.parameters(), lr=lr_in)  # , weight_decay=wd_in)
-        self.optimizer_adam = optim.Adamax(self.policy_estimator.network.parameters(), lr=lr_in)
-
-        self.list_mean_score = [0]  # Список усредненных значений
-        self.list_rolout_score = []
+        self.trainers = []
 
         self.timer = QtCore.QTimer()
 
+        self.max_x = 0
+        self.min_x = 0
+        self.max_y = 0
+        self.min_y = 0
         # self.start_manual()
         self.start_autogame()
 
@@ -151,81 +148,116 @@ class MainWindow(QtWidgets.QMainWindow):
     def start_autogame(self):
         self.canvas.figure.clf()
         self.canvas.axes = self.canvas.figure.add_subplot(111)
+
+        loss_fn = nn.CrossEntropyLoss()
+
+        policy_estimator = PolicyEstimator(statement_size=higth_weel_g * width_weel_g, action_size=9,
+                        device_in=self.device)
+
+        pe1 = PolicyEstimator(statement_size=higth_weel_g * width_weel_g, action_size=9,
+                        device_in=self.device)
+        pe1.network.load_state_dict(copy.deepcopy(policy_estimator.network.state_dict()))
+
+        pe2 = PolicyEstimator(statement_size=higth_weel_g * width_weel_g, action_size=9,
+                        device_in=self.device)
+        pe2.network.load_state_dict(copy.deepcopy(policy_estimator.network.state_dict()))
+
+        pe3 = PolicyEstimator(statement_size=higth_weel_g * width_weel_g, action_size=9,
+                        device_in=self.device)
+        pe3.network.load_state_dict(copy.deepcopy(policy_estimator.network.state_dict()))
+
+        pe4 = PolicyEstimator(statement_size=higth_weel_g * width_weel_g, action_size=9,
+                        device_in=self.device)
+        pe4.network.load_state_dict(copy.deepcopy(policy_estimator.network.state_dict()))
+
+        pe5 = PolicyEstimator(statement_size=higth_weel_g * width_weel_g, action_size=9,
+                        device_in=self.device)
+        pe5.network.load_state_dict(copy.deepcopy(policy_estimator.network.state_dict()))
+
+        self.trainers.append(NetworkTrainer(
+            pe1,
+            experienceReplayBuffer(memory_size=5000),
+            optim.Adamax(pe1.network.parameters(), lr=1e-3),
+            128,
+            self.device,
+            self.canvas.axes,
+            'net1',
+            'blue',
+            None
+        ))
+        self.trainers.append(NetworkTrainer(
+            pe2,
+            experienceReplayBuffer(memory_size=5000),
+            optim.Adamax(pe2.network.parameters(), lr=1e-3),
+            128,
+            self.device,
+            self.canvas.axes,
+            'net2',
+            'green',
+            loss_fn
+        ))
+
         self.iteration = 0
-        self.timer.singleShot(10, self.start_autogame_iteration)
+        self.timer.singleShot(10, self.autogame_loop_func)
 
-    def start_autogame_iteration(self):
-        x = self.iteration
-        data_set_images, data_set_actions, data_set_reward = game_funct(kol_game, self.policy_estimator, higth_weel_g,
-                                                                        width_weel_g, width_racet_g,
-                                                                        max_point_weel_g, kol_point,
-                                                                        min_len_between_point, self.list_rolout_score)
-        self.global_buffer.append_butch(data_set_images, data_set_actions, data_set_reward)
-        sel_pr = teach_net(self.global_buffer.sample_batch(batch_size=128), self.policy_estimator, self.optimizer_adam,
-                           self.device)
-        self.global_buffer.clear()
+    def autogame_loop_func(self):
+        all_done = True
+        need_draw = False
 
-        # lr_in = 1e-2 * 0.95 * (x / 10)
-        # self.optimizer_adam = optim.Adam(self.policy_estimator.network.parameters(), lr=lr_in)  # , weight_decay=wd_in)
-
-        # if self.iteration % 500 == 0:
-        #     sel_pr = manual_teach_net(self.manual_buffer.sample_batch(batch_size=32), self.policy_estimator, self.optimizerSGD,
-        #                               self.criterionSGD, self.device)
-
-        # Анализ степени обученности
-
-        if x % 100 == 0:
-            # self.canvas.axes.cla()
-            paint_mean_score(x, self.list_rolout_score, self.list_mean_score, self.canvas)
-            # self.optimizer_adam = optim.Adam(self.policy_estimator.network.parameters(),
-            #                                  lr=1e-2 * 0.95 * (x / 100))  # , weight_decay=wd_in)
-            self.list_rolout_score = []
-
-        print('Цикл обучения № ', x)
-        mean_score=0
-        if len(self.list_rolout_score) >= step:
-            mean_score = np.array(self.list_rolout_score[-step:]).mean()
-        else:
-            if len(self.list_mean_score) > 0:
-                mean_score = self.list_mean_score[-1]
-        mean_score = round(mean_score, 2)
-        if mean_score >= kol_point * kol_game or x > 50000:
-            print('Обучение Закончено')
-            self.save_model()
-            self.print_last_game(self.policy_estimator)
+        for trainer in self.trainers:
+            if trainer.done:
+                continue
+            all_done = False
+            done = trainer.start_autogame_iteration(self.iteration)
+            if self.iteration % 100 == 0:
+                if self.min_x > trainer.min_x:
+                    self.min_x = trainer.min_x
+                if self.max_x < trainer.max_x:
+                    self.max_x = trainer.max_x
+                if self.min_y > trainer.min_y:
+                    self.min_y = trainer.min_y
+                if self.max_y < trainer.max_y:
+                    self.max_y = trainer.max_y
+            if done:
+                need_draw = True
+                self.autogame_save_results(trainer)
+        if all_done:
             self.save_loss()
-
+        if self.iteration % 20 == 0:
+            need_draw = True
+        if self.iteration % 100 == 0:
+            self.canvas.axes.set_xlim(xmax=self.max_x + 100, xmin=self.min_x - 10)
+            self.canvas.axes.set_ylim(ymax=self.max_y + 2, ymin=self.min_y - 2)
+        self.iteration = self.iteration + 1
+        if need_draw:
             exec_time = round(time.time() - self.start_time, 2)
-            print("--- %s seconds ---" % exec_time)
+            # print("--- %s seconds ---" % exec_time)
             self.canvas.axes.set_title(
-                'Обучение закончено\nДанные сохранены' + "\n--- %s seconds ---" % exec_time,
+                'Цикл обучения № ' + str(self.iteration)  + "\n--- %s seconds ---" % exec_time,
                 fontsize=12)
             self.canvas.draw()
-            return
-
-        if x % 20 == 0:
-            print('Точность на последних циклах ', str(step), ' = ', mean_score)
-            exec_time = round(time.time() - self.start_time, 2)
-            print("--- %s seconds ---" % exec_time)
-            self.canvas.axes.set_title(
-                'Цикл обучения № ' + str(x) + '\nТочность на последних циклах ' + str(step) + ' = ' + str(
-                    mean_score) + "\n--- %s seconds ---" % exec_time,
-                fontsize=12)
-            self.canvas.draw()
-            self.iteration = self.iteration + 1
-            self.timer.singleShot(10, self.start_autogame_iteration)
+            self.timer.singleShot(10, self.autogame_loop_func)
         else:
-            # Отрисовка не нужна
-            self.iteration = self.iteration + 1
-            self.start_autogame_iteration()
+            self.autogame_loop_func()
 
-    def save_model(self):
-        torch.save(self.policy_estimator.network.state_dict(), DIR+'smart_2.pth')
+    def autogame_save_results(self, trainer: NetworkTrainer):
+        print('Обучение Закончено')
+        self.save_model(trainer)
+        self.print_last_game(trainer)
+
+        exec_time = round(time.time() - self.start_time, 2)
+        print("--- %s seconds ---" % exec_time)
+        trainer.axes.set_title(
+            'Обучение закончено\nДанные сохранены' + "\n--- %s seconds ---" % exec_time,
+            fontsize=12)
+
+    def save_model(self, trainer: NetworkTrainer):
+        torch.save(trainer.policy_estimator.network.state_dict(), DIR + 'smart_' + trainer.name + '.pth')
 
     def save_loss(self):
-        self.canvas.figure.savefig(DIR + 'smart_2_loss.png')
+        self.canvas.figure.savefig(DIR + 'smart_all_loss.png')
 
-    def print_last_game(self, policy_estimator):
+    def print_last_game(self, trainer: NetworkTrainer):
         fig = plt.figure(figsize=(5, 5))
         plt.axis('off')
         camera = Camera(fig)
@@ -239,8 +271,8 @@ class MainWindow(QtWidgets.QMainWindow):
             # Блок выбора действия для Агента
             image = G.get_weel_state()
             image_tensor = torch.Tensor(np.expand_dims([image], axis=0)).float()
-            prediction = policy_estimator.predict(image_tensor)  # Предсказываем
-            if policy_estimator.device_in == 'cpu':
+            prediction = trainer.policy_estimator.predict(image_tensor)  # Предсказываем
+            if trainer.policy_estimator.device_in == 'cpu':
                 action = np.argmax(prediction.cpu().detach().numpy())  # Получаем решение, что делать 'cpu'
             else:
                 action = torch.max(prediction.detach(), 1)[1].item()  # Получаем решение, что делать 'cuda'
@@ -252,12 +284,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         anim = camera.animate()
 
-        anim.save(DIR+'smart_2.gif', writer='PillowWriter', fps=50)
+        anim.save(DIR + 'smart_' + trainer.name + '.gif', writer='PillowWriter', fps=50)
 
 
 # rc('animation', html='jshtml')
 
-
+plt.plot(np.array([]))
 app = QtWidgets.QApplication(sys.argv)
 w = MainWindow()
 app.exec_()

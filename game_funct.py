@@ -142,7 +142,7 @@ def manual_teach_net(batch, policy_estimator, optimizer, criterion, device_in='c
 
 
 # Одноканальная Игра
-def teach_net(batch, policy_estimator, optimizer, device_in='cuda'):
+def teach_net(batch, policy_estimator, optimizer, loss_fn, device_in='cuda'):
     optimizer.zero_grad()
     # Распаковываем батч данных
     # print(dir(batch))
@@ -153,36 +153,22 @@ def teach_net(batch, policy_estimator, optimizer, device_in='cuda'):
     score_tensor = torch.Tensor(rewards).float().to(device_in)
 
     action_tensor = torch.Tensor(actions).long().to(device_in)
-    # Этап 1 - логарифмируем вероятности действий
-    prob = torch.log(policy_estimator.predict(image_tensor))
-    # Этап 2 - отрицательное среднее произведения вероятностей на награду
-    selected_probs = score_tensor * prob[np.arange(len(action_tensor)), action_tensor]
-    loss = -selected_probs.mean()
+
+    if loss_fn is None:
+        # Этап 1 - логарифмируем вероятности действий
+        prob = torch.log(policy_estimator.predict(image_tensor))
+        # Этап 2 - отрицательное среднее произведения вероятностей на награду
+        selected_probs = score_tensor * prob[np.arange(len(action_tensor)), action_tensor]
+        loss = -selected_probs.mean()
+    else:
+        # loss = loss_fn(policy_estimator.predict(image_tensor), action_tensor)
+        # Этап 1 - логарифмируем вероятности действий
+        prob = torch.log(policy_estimator.predict(image_tensor)[np.arange(len(action_tensor)), action_tensor])
+        # Этап 2 - отрицательное среднее произведения вероятностей на награду
+        selected_probs = score_tensor * prob
+        loss = -selected_probs.mean()
     loss.backward()
     optimizer.step()
-    return selected_probs
 
 
-# отрисовка процесса обучения - средний результат серии из 10 игр
-def paint_mean_score(num_step, list_rolout_score, list_mean_score, canvas):
-    step = 10  # Шаг усреднения
 
-    if len(list_rolout_score) >= step:
-        # Усредняем в обратном порядке
-        for num in range(int(len(list_rolout_score) / step), 0, -1):
-            mean_score = np.array(list_rolout_score[num * step - step:num * step]).mean()
-            list_mean_score.append(mean_score)
-
-        #list_mean_score = list_mean_score[::-1]  # разворачиваем список
-        mn_sc = np.array(list_mean_score)
-        # fig, subplot = plt.subplots()  # доступ к Figure и Subplot
-        # subplot.plot(mn_sc)  # построение графика функции
-        # gr_dir_name = './Grafics/'
-        # gr_file_name = str(num_step) + '_' + str(mn_sc[-1]) + '_' + str(kol_point) + '_point_' + 'Conv2D' + '.png'
-        # plt.title(gr_file_name, fontsize=12)
-        # plt.savefig(gr_dir_name + gr_file_name)
-        # plt.show()
-
-        canvas.axes.plot(mn_sc, color='blue')
-        canvas.axes.set_title('Lern epoh', fontsize=12)
-        canvas.draw()
