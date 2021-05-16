@@ -67,6 +67,11 @@ class NetworkTrainer(object):
             self.paint_mean_score()
             self.list_rollout_score = []
             self.list_rollout_loss = []
+            mean_score = 0
+            if len(self.list_mean_score) > 0:
+                mean_score = self.list_mean_score[-1]
+            mean_score = round(mean_score, 2)
+            history2.log(step, loss=loss, accuracy=mean_score, image=image)
 
         mean_score = 0
         if len(self.list_rollout_score) >= step:

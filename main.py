@@ -36,6 +36,11 @@ from PyQt5 import QtCore, QtWidgets, QtGui
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 
+import torchvision.models
+from torchvision import datasets, transforms
+import hiddenlayer as hl
+
+
 matplotlib.use('Qt5Agg')
 
 DIR = '/home/prizrak/Загрузки/'
@@ -73,6 +78,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # which defines a single set of axes as self.axes.
         sc = MplCanvas(self, width=10, height=10, dpi=100)
         # sc.axes.plot([0,1,2,3,4], [10,1,20,3,40])
+
+        self.history2 = hl.History()
+        self.canvas2 = hl.Canvas()
 
         self.start_time = time.time()
 
@@ -145,6 +153,24 @@ class MainWindow(QtWidgets.QMainWindow):
                                   self.device)
         self.start_autogame()
 
+    def activations_hook1(self, inputs, output):
+        """Intercepts the forward pass and logs activations.
+        """
+        batch_ix = step[1]
+        if batch_ix and batch_ix % 100 == 0:
+            # The output of this layer is of shape [batch_size, 16, 32, 32]
+            # Take a slice that represents one feature map
+            self.history2.log(step, layer1=output.data[0, 0])
+
+    def activations_hook2(self, inputs, output):
+        """Intercepts the forward pass and logs activations.
+        """
+        batch_ix = step[1]
+        if batch_ix and batch_ix % 100 == 0:
+            # The output of this layer is of shape [batch_size, 16, 32, 32]
+            # Take a slice that represents one feature map
+            self.history2.log(step, layer2=output.data[0, 0])
+
     def start_autogame(self):
         self.canvas.figure.clf()
         self.canvas.axes = self.canvas.figure.add_subplot(111)
@@ -174,6 +200,12 @@ class MainWindow(QtWidgets.QMainWindow):
                         device_in=self.device)
         pe5.network.load_state_dict(copy.deepcopy(policy_estimator.network.state_dict()))
 
+
+
+        pe1.network.layer1[0].register_forward_hook(self.activations_hook1)
+        pe1.network.layer2[0].register_forward_hook(self.activations_hook2)
+
+
         self.trainers.append(NetworkTrainer(
             pe1,
             experienceReplayBuffer(memory_size=5000),
@@ -184,17 +216,6 @@ class MainWindow(QtWidgets.QMainWindow):
             'net1',
             'blue',
             None
-        ))
-        self.trainers.append(NetworkTrainer(
-            pe2,
-            experienceReplayBuffer(memory_size=5000),
-            optim.Adamax(pe2.network.parameters(), lr=1e-3),
-            128,
-            self.device,
-            self.canvas.axes,
-            'net2',
-            'green',
-            loss_fn
         ))
 
         self.iteration = 0
