@@ -185,17 +185,6 @@ class MainWindow(QtWidgets.QMainWindow):
             'blue',
             None
         ))
-        self.trainers.append(NetworkTrainer(
-            pe2,
-            experienceReplayBuffer(memory_size=5000),
-            optim.Adamax(pe2.network.parameters(), lr=1e-3),
-            128,
-            self.device,
-            self.canvas.axes,
-            'net2',
-            'green',
-            loss_fn
-        ))
 
         self.iteration = 0
         self.timer.singleShot(10, self.autogame_loop_func)
@@ -228,6 +217,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.iteration % 100 == 0:
             self.canvas.axes.set_xlim(xmax=self.max_x + 100, xmin=self.min_x - 10)
             self.canvas.axes.set_ylim(ymax=self.max_y + 2, ymin=self.min_y - 2)
+        if self.iteration % 1000 == 0:
+            trainer.policy_estimator.next_step()
         self.iteration = self.iteration + 1
         if need_draw:
             exec_time = round(time.time() - self.start_time, 2)
