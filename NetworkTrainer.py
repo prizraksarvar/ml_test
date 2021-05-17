@@ -24,12 +24,12 @@ kol_game = 3  # количество игр в цикле обучения
 
 class NetworkTrainer(object):
     def __init__(self, policy_estimator: PolicyEstimator, buffer: experienceReplayBuffer, optimizer: optim.Optimizer,
-                 batch_size: int, device: torch.device, axes, name: str, color: str, loss_fn):
+                 batch_size: int, device: torch.device, history2, name: str, color: str, loss_fn):
         self.policy_estimator = policy_estimator
         self.buffer = buffer
         self.optimizer = optimizer
         self.batch_size = batch_size
-        self.axes = axes
+        self.history2 = history2
         self.device = device
         self.list_mean_score = [0]  # Список усредненных значений
         self.list_mean_score_y = [0]
@@ -63,15 +63,10 @@ class NetworkTrainer(object):
         self.buffer.clear()
 
         # Анализ степени обученности
-        if x % 100 == 0:
-            self.paint_mean_score()
+        if x > 0 and x % 100 == 0:
+            self.paint_mean_score(x)
             self.list_rollout_score = []
             self.list_rollout_loss = []
-            mean_score = 0
-            if len(self.list_mean_score) > 0:
-                mean_score = self.list_mean_score[-1]
-            mean_score = round(mean_score, 2)
-            history2.log(step, loss=loss, accuracy=mean_score, image=image)
 
         mean_score = 0
         if len(self.list_rollout_score) >= step:
@@ -95,44 +90,19 @@ class NetworkTrainer(object):
         return False
 
     # отрисовка процесса обучения - средний результат серии из 10 игр
-    def paint_mean_score(self):
+    def paint_mean_score(self, x):
         local_step = 10  # Шаг усреднения
 
-        if len(self.list_rollout_score) >= local_step:
-            # Усредняем в обратном порядке
-            for num in range(int(len(self.list_rollout_score) / local_step), 0, -1):
-                mean_score = np.array(self.list_rollout_score[num * local_step - local_step:num * local_step]).mean()
-                mean_loss = np.array(self.list_rollout_loss[num * local_step - local_step:num * local_step]).mean()
-                self.list_mean_score.append(mean_score)
-                self.list_mean_score_y.append(self.y_len * 10)
-                if mean_score > self.max_y:
-                    self.max_y = mean_score
-                if mean_score < self.min_y:
-                    self.min_y = mean_score
-                self.max_x = self.y_len * 10
-                self.y_len += 1
-                self.list_mean_loss.append(mean_loss)
+        # if len(self.list_rollout_score) >= local_step:
+        #     Усредняем в обратном порядке
+        #     for num in range(int(len(self.list_rollout_score) / local_step), 0, -1):
+        #         mean_score = np.array(self.list_rollout_score[num * local_step - local_step:num * local_step]).mean()
+        #         mean_loss = np.array(self.list_rollout_loss[num * local_step - local_step:num * local_step]).mean()
+        #         self.history2.log(self.y_len * 10, loss=mean_loss, accuracy=mean_score)
+        #         self.y_len += 1
 
-            # list_mean_score = list_mean_score[::-1]  # разворачиваем список
-            mn_sc = np.array(self.list_mean_score)
-            mn_sc_y = np.array(self.list_mean_score_y)
-            # fig, subplot = plt.subplots()  # доступ к Figure и Subplot
-            # subplot.plot(mn_sc)  # построение графика функции
-            # gr_dir_name = './Grafics/'
-            # gr_file_name = str(num_step) + '_' + str(mn_sc[-1]) + '_' + str(kol_point) + '_point_' + 'Conv2D' + '.png'
-            # plt.title(gr_file_name, fontsize=12)
-            # plt.savefig(gr_dir_name + gr_file_name)
-            # plt.show()
-
-            if self.plot_rf is None:
-                self.plot_rf = self.axes.plot(mn_sc_y, mn_sc, color=self.color, label=self.name)[0]
-                self.axes.legend()
-            else:
-                self.plot_rf.set_data(mn_sc_y, mn_sc)
-
-            if self.plot_loss_rf is None:
-                self.plot_loss_rf = self.axes.plot(mn_sc_y, np.array(self.list_mean_loss), color='light'+self.color, label=self.name+'_loss')[0]
-                self.axes.legend()
-            else:
-                self.plot_loss_rf.set_data(mn_sc_y, np.array(self.list_mean_loss))
+        if len(self.list_rollout_score) > 0:
+            mean_score = np.array(self.list_rollout_score).mean()
+            mean_loss = np.array(self.list_rollout_loss).mean()
+            self.history2.log((0, x), loss=mean_loss, accuracy=mean_score)
 

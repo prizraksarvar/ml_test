@@ -1,9 +1,6 @@
 from time import sleep
 
 import numpy as np
-from IPython.display import clear_output
-from PyQt5 import QtCore
-from matplotlib import pyplot as plt
 from Game import Game
 from game_funct import discount_correct_rewards
 
