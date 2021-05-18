@@ -14,6 +14,8 @@ import torch.optim as optim
 from matplotlib import pyplot as plt
 from celluloid import Camera
 
+from functools import partial
+
 import torchvision.models
 from torchvision import datasets, transforms
 import hiddenlayer as hl
@@ -65,23 +67,15 @@ class App(object):
     def start(self):
         self.start_autogame()
 
-    def activations_hook1(self, rself, inputs, output):
+    def activations_hook(self, name, rself, inputs, output):
         """Intercepts the forward pass and logs activations.
         """
         batch_ix = self.iteration
         if batch_ix > 0 and batch_ix % 100 == 0:
             # The output of this layer is of shape [batch_size, 16, 32, 32]
             # Take a slice that represents one feature map
-            self.history2.log((0, batch_ix), layer1=output.data[0, 0])
-
-    def activations_hook2(self, rself, inputs, output):
-        """Intercepts the forward pass and logs activations.
-        """
-        batch_ix = self.iteration
-        if batch_ix > 0 and batch_ix % 100 == 0:
-            # The output of this layer is of shape [batch_size, 16, 32, 32]
-            # Take a slice that represents one feature map
-            self.history2.log((0, batch_ix), layer2=output.data[0, 0])
+            kw = {name: output.data[0, 0]}
+            self.history2.log((0, batch_ix), **kw)
 
     def start_autogame(self):
         loss_fn = nn.CrossEntropyLoss()
@@ -109,8 +103,8 @@ class App(object):
                               device_in=self.device)
         pe5.network.load_state_dict(copy.deepcopy(policy_estimator.network.state_dict()))
 
-        pe1.network.layer1[0].register_forward_hook(self.activations_hook1)
-        pe1.network.layer2[0].register_forward_hook(self.activations_hook2)
+        pe1.network.layer1[0].register_forward_hook(partial(self.activations_hook, "layer1"))
+        pe1.network.layer2[0].register_forward_hook(partial(self.activations_hook, "layer2"))
 
         self.trainers.append(NetworkTrainer(
             pe1,
@@ -137,7 +131,7 @@ class App(object):
                 continue
             all_done = False
             done = trainer.start_autogame_iteration(self.iteration)
-            if self.iteration % 100 == 0:
+            if self.iteration > 0 and self.iteration % 100 == 0:
                 if self.min_x > trainer.min_x:
                     self.min_x = trainer.min_x
                 if self.max_x < trainer.max_x:
